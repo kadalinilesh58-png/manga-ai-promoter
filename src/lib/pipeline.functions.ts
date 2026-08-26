@@ -16,6 +16,8 @@ import { buildAuthUrl, getChannelRow, redirectUriFor } from "./youtube.server";
 import { loadJob, persistDraft, saveThumbnailPath, listJobs, removeChannel } from "./jobs.server";
 
 export const getConnection = createServerFn({ method: "GET" }).handler(async () => {
+  // Opportunistic cleanup: removes server-side artifacts older than one hour.
+  purgeExpiredArtifacts(60).catch(() => undefined);
   const row = await getChannelRow();
   return row
     ? {
