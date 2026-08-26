@@ -27,7 +27,6 @@ export function buildAuthUrl(origin: string, state: string) {
     response_type: "code",
     scope: YOUTUBE_SCOPES,
     access_type: "offline",
-    include_granted_scopes: "true",
     prompt: "consent",
     state,
   });
