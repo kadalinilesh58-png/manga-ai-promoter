@@ -2,6 +2,15 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { signThumbnail } from "./pipeline.server";
 import type { Metadata, ResearchData, StoryBrief } from "./pipeline.server";
 
+export type ResearchSummary = {
+  brief?: StoryBrief;
+  strategyNotes?: string[];
+  queries?: string[];
+  suggestions?: string[];
+  topTags?: { tag: string; count: number }[];
+  competitors?: { title: string; channel: string; views: number }[];
+};
+
 export type JobView = {
   id: string;
   status: string;
@@ -14,7 +23,7 @@ export type JobView = {
   thumbnailUrl: string | null;
   thumbnailPrompt: string | null;
   youtubeVideoId: string | null;
-  research: unknown;
+  research: ResearchSummary | null;
   createdAt: string;
 };
 
@@ -30,7 +39,7 @@ type Row = {
   thumbnail_path: string | null;
   thumbnail_prompt: string | null;
   youtube_video_id: string | null;
-  research: unknown;
+  research: ResearchSummary | null;
   created_at: string;
 };
 
@@ -47,7 +56,7 @@ async function toView(row: Row): Promise<JobView> {
     thumbnailUrl: await signThumbnail(row.thumbnail_path),
     thumbnailPrompt: row.thumbnail_prompt,
     youtubeVideoId: row.youtube_video_id,
-    research: row.research,
+    research: (row.research ?? null) as ResearchSummary | null,
     createdAt: row.created_at,
   };
 }
