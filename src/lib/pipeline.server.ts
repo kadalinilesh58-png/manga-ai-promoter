@@ -366,15 +366,158 @@ export async function finalizeUpload(jobId: string, videoId: string) {
     }
   }
 
+  const now = new Date().toISOString();
   await supabaseAdmin
     .from("video_jobs")
     .update({
       status: "published",
       youtube_video_id: videoId,
       channel_id: channel.channel_id,
-      updated_at: new Date().toISOString(),
+      published_at: now,
+      updated_at: now,
     })
     .eq("id", jobId);
 
   return { videoId, thumbnailApplied, url: `https://www.youtube.com/watch?v=${videoId}` };
+}
+
+/* ------------------------------------------------------------------ */
+/* Post-publish verification                                           */
+/* ------------------------------------------------------------------ */
+
+export type Verification = {
+  ok: boolean;
+  videoId: string;
+  uploadStatus: string | null;
+  privacyStatus: string | null;
+  processingStatus: string | null;
+  rejectionReason: string | null;
+  failureReason: string | null;
+  title: string | null;
+  thumbnailApplied: boolean;
+  problems: string[];
+  checkedAt: string;
+};
+
+/** Reads the video back from YouTube and confirms it really is live and playable. */
+export async function verifyPublish(jobId: string, videoId: string): Promise<Verification> {
+  const { token } = await getAccessToken();
+  const res = await ytFetch(
+    `videos?part=status,processingDetails,snippet,contentDetails&id=${videoId}`,
+    token,
+  );
+  const item = (res as { items?: Array<Record<string, any>> })?.items?.[0];
+  const problems: string[] = [];
+
+  if (!item) {
+    const verification: Verification = {
+      ok: false,
+      videoId,
+      uploadStatus: null,
+      privacyStatus: null,
+      processingStatus: null,
+      rejectionReason: null,
+      failureReason: null,
+      title: null,
+      thumbnailApplied: false,
+      problems: ["YouTube did not return this video yet. Give it a moment and re-check."],
+      checkedAt: new Date().toISOString(),
+    };
+    await saveVerification(jobId, verification);
+    return verification;
+  }
+
+  const status = item['status'] ?? {};
+  const processing = item['processingDetails'] ?? {};
+  const snippet = item['snippet'] ?? {};
+
+  const uploadStatus: string | null = status.uploadStatus ?? null;
+  const processingStatus: string | null = processing.processingStatus ?? null;
+
+  if (uploadStatus === "rejected") {
+    problems.push(`YouTube rejected the video (${status.rejectionReason ?? "unknown reason"}).`);
+  }
+  if (uploadStatus === "failed") {
+    problems.push(`Upload failed (${status.failureReason ?? "unknown reason"}).`);
+  }
+  if (uploadStatus === "uploaded" || processingStatus === "processing") {
+    problems.push("YouTube is still processing the video — re-check in a few minutes.");
+  }
+  if (processingStatus === "failed") {
+    problems.push("YouTube could not process the file (parse/transcode failure).");
+  }
+  const thumbnailApplied = Boolean(
+    snippet.thumbnails?.maxres || snippet.thumbnails?.standard || snippet.thumbnails?.high,
+  );
+
+  const verification: Verification = {
+    ok: uploadStatus === "processed" && processingStatus !== "failed" && problems.length === 0,
+    videoId,
+    uploadStatus,
+    privacyStatus: status.privacyStatus ?? null,
+    processingStatus,
+    rejectionReason: status.rejectionReason ?? null,
+    failureReason: status.failureReason ?? null,
+    title: snippet.title ?? null,
+    thumbnailApplied,
+    problems,
+    checkedAt: new Date().toISOString(),
+  };
+
+  await saveVerification(jobId, verification);
+  return verification;
+}
+
+async function saveVerification(jobId: string, verification: Verification) {
+  await supabaseAdmin
+    .from("video_jobs")
+    .update({
+      verification: verification as unknown as Record<string, unknown>,
+      verified_at: verification.checkedAt,
+      status: verification.ok ? "verified" : "published",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", jobId);
+}
+
+/* ------------------------------------------------------------------ */
+/* Server-side cleanup — 1 hour after publish                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Deletes every server-side artifact for videos published more than one hour
+ * ago: the generated thumbnail file in storage and the story-derived working
+ * data. The YouTube video itself is never touched.
+ */
+export async function purgeExpiredArtifacts(olderThanMinutes = 60) {
+  const cutoff = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("video_jobs")
+    .select("id, thumbnail_path, youtube_video_id")
+    .not("published_at", "is", null)
+    .lte("published_at", cutoff)
+    .is("purged_at", null);
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as { id: string; thumbnail_path: string | null }[];
+  const paths = rows.map((r) => r.thumbnail_path).filter((p): p is string => Boolean(p));
+  if (paths.length) {
+    await supabaseAdmin.storage.from("thumbnails").remove(paths);
+  }
+
+  const now = new Date().toISOString();
+  for (const row of rows) {
+    await supabaseAdmin
+      .from("video_jobs")
+      .update({
+        thumbnail_path: null,
+        research: null,
+        status: "archived",
+        purged_at: now,
+        updated_at: now,
+      })
+      .eq("id", row.id);
+  }
+
+  return { purged: rows.length, thumbnailsDeleted: paths.length, cutoff };
 }
