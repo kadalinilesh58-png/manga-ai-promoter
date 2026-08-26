@@ -25,6 +25,8 @@ export type Database = {
           hashtags: string[]
           id: string
           keywords: string[]
+          published_at: string | null
+          purged_at: string | null
           research: Json | null
           status: string
           tags: string[]
@@ -32,6 +34,8 @@ export type Database = {
           thumbnail_prompt: string | null
           title: string | null
           updated_at: string
+          verification: Json | null
+          verified_at: string | null
           youtube_video_id: string | null
         }
         Insert: {
@@ -44,6 +48,8 @@ export type Database = {
           hashtags?: string[]
           id?: string
           keywords?: string[]
+          published_at?: string | null
+          purged_at?: string | null
           research?: Json | null
           status?: string
           tags?: string[]
@@ -51,6 +57,8 @@ export type Database = {
           thumbnail_prompt?: string | null
           title?: string | null
           updated_at?: string
+          verification?: Json | null
+          verified_at?: string | null
           youtube_video_id?: string | null
         }
         Update: {
@@ -63,6 +71,8 @@ export type Database = {
           hashtags?: string[]
           id?: string
           keywords?: string[]
+          published_at?: string | null
+          purged_at?: string | null
           research?: Json | null
           status?: string
           tags?: string[]
@@ -70,6 +80,8 @@ export type Database = {
           thumbnail_prompt?: string | null
           title?: string | null
           updated_at?: string
+          verification?: Json | null
+          verified_at?: string | null
           youtube_video_id?: string | null
         }
         Relationships: []
