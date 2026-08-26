@@ -31,7 +31,7 @@ export async function uploadResumable(
           "Content-Type": file.type || "video/mp4",
         },
         body: chunk,
-        signal,
+        signal: signal ?? null,
       });
     } catch (e) {
       attempts += 1;
