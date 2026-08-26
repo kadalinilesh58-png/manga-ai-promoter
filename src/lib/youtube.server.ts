@@ -2,10 +2,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const YOUTUBE_SCOPES = [
   "https://www.googleapis.com/auth/youtube.upload",
-  "https://www.googleapis.com/auth/youtube",
-  "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/youtube.force-ssl",
 ].join(" ");
+
 
 export function googleClient() {
   const clientId = process.env["GOOGLE_OAUTH_CLIENT_ID"];
