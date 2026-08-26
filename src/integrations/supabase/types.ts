@@ -14,7 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      video_jobs: {
+        Row: {
+          channel_id: string | null
+          created_at: string
+          description: string | null
+          error: string | null
+          file_name: string | null
+          file_size: number | null
+          hashtags: string[]
+          id: string
+          keywords: string[]
+          research: Json | null
+          status: string
+          tags: string[]
+          thumbnail_path: string | null
+          thumbnail_prompt: string | null
+          title: string | null
+          updated_at: string
+          youtube_video_id: string | null
+        }
+        Insert: {
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          error?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          hashtags?: string[]
+          id?: string
+          keywords?: string[]
+          research?: Json | null
+          status?: string
+          tags?: string[]
+          thumbnail_path?: string | null
+          thumbnail_prompt?: string | null
+          title?: string | null
+          updated_at?: string
+          youtube_video_id?: string | null
+        }
+        Update: {
+          channel_id?: string | null
+          created_at?: string
+          description?: string | null
+          error?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          hashtags?: string[]
+          id?: string
+          keywords?: string[]
+          research?: Json | null
+          status?: string
+          tags?: string[]
+          thumbnail_path?: string | null
+          thumbnail_prompt?: string | null
+          title?: string | null
+          updated_at?: string
+          youtube_video_id?: string | null
+        }
+        Relationships: []
+      }
+      youtube_channels: {
+        Row: {
+          access_token: string
+          channel_id: string
+          channel_title: string
+          created_at: string
+          id: string
+          refresh_token: string
+          thumbnail_url: string | null
+          token_expires_at: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          channel_id: string
+          channel_title: string
+          created_at?: string
+          id?: string
+          refresh_token: string
+          thumbnail_url?: string | null
+          token_expires_at: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          channel_id?: string
+          channel_title?: string
+          created_at?: string
+          id?: string
+          refresh_token?: string
+          thumbnail_url?: string | null
+          token_expires_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
