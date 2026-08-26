@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import { chatJson, generateImageBase64 } from "./ai.server";
 import { getAccessToken, ytFetch } from "./youtube.server";
 
