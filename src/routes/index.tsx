@@ -116,8 +116,14 @@ function Home() {
   };
 
   const runResearchStep = async () => {
-    if (!storyText.trim()) return toast.error("Add the story .txt file first");
-    if (!connection?.connected) return toast.error("Connect your YouTube channel first");
+    if (!storyText.trim()) {
+      toast.error("Add the story .txt file first");
+      return;
+    }
+    if (!connection?.connected) {
+      toast.error("Connect your YouTube channel first");
+      return;
+    }
     try {
       setBusy("plan");
       setPublishedUrl(null);
@@ -155,7 +161,10 @@ function Home() {
   };
 
   const publish = async () => {
-    if (!plan || !videoFile) return toast.error("Pick the video file first");
+    if (!plan || !videoFile) {
+      toast.error("Pick the video file first");
+      return;
+    }
     try {
       setBusy("upload");
       setProgress(0);
