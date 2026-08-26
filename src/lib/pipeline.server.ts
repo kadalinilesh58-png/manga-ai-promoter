@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import { chatJson, generateImageBase64 } from "./ai.server";
 import { getAccessToken, ytFetch } from "./youtube.server";
 
@@ -472,7 +473,7 @@ async function saveVerification(jobId: string, verification: Verification) {
   await supabaseAdmin
     .from("video_jobs")
     .update({
-      verification: verification as unknown as Record<string, unknown>,
+      verification: JSON.parse(JSON.stringify(verification)) as Json,
       verified_at: verification.checkedAt,
       status: verification.ok ? "verified" : "published",
       updated_at: new Date().toISOString(),

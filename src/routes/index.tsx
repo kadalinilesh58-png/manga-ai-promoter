@@ -12,6 +12,8 @@ import {
   Link2Off,
   CheckCircle2,
   ImageIcon,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ import {
   generatePlan,
   getAuthLink,
   getConnection,
+  verifyVideo,
 } from "@/lib/pipeline.functions";
 import { uploadResumable } from "@/lib/resumable-upload";
 
@@ -56,6 +59,7 @@ export const Route = createFileRoute("/")({
 type Connection = { connected: boolean; channelTitle?: string; thumbnailUrl?: string | null };
 
 type Plan = Awaited<ReturnType<typeof generatePlan>>;
+type Verification = Awaited<ReturnType<typeof verifyVideo>>;
 
 function formatBytes(n: number) {
   if (n < 1024) return `${n} B`;
@@ -80,6 +84,8 @@ function Home() {
   const [busy, setBusy] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [verification, setVerification] = useState<Verification | null>(null);
+  const [publishedVideoId, setPublishedVideoId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const refreshConnection = async () => {
@@ -127,6 +133,8 @@ function Home() {
     try {
       setBusy("plan");
       setPublishedUrl(null);
+      setVerification(null);
+      setPublishedVideoId(null);
       const result = await generatePlan({
         data: {
           storyText,
@@ -185,9 +193,29 @@ function Home() {
       setBusy("finalize");
       const done = await completeUpload({ data: { jobId: plan.job.id, videoId } });
       setPublishedUrl(done.url);
+      setPublishedVideoId(done.videoId);
       toast.success(done.thumbnailApplied ? "Published with custom thumbnail" : "Published");
+      setBusy("verify");
+      const v = await verifyVideo({ data: { jobId: plan.job.id, videoId: done.videoId } });
+      setVerification(v);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const recheck = async () => {
+    if (!plan || !publishedVideoId) return;
+    try {
+      setBusy("verify");
+      const v = await verifyVideo({ data: { jobId: plan.job.id, videoId: publishedVideoId } });
+      setVerification(v);
+      toast[v.ok ? "success" : "message"](
+        v.ok ? "Video verified live on YouTube" : v.problems[0] ?? "Still processing",
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Verification failed");
     } finally {
       setBusy(null);
     }
@@ -406,14 +434,67 @@ function Home() {
           ) : null}
 
           {publishedUrl ? (
-            <a
-              href={publishedUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-accent underline"
-            >
-              <CheckCircle2 className="size-4" /> Live on YouTube — open video
-            </a>
+            <div className="space-y-4">
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-accent underline"
+              >
+                <CheckCircle2 className="size-4" /> Live on YouTube — open video
+              </a>
+
+              <div
+                className={`rounded-xl border p-4 ${
+                  verification?.ok
+                    ? "border-accent/50 bg-accent/10"
+                    : "border-destructive/40 bg-destructive/10"
+                }`}
+              >
+                <div className="mb-2 flex items-center gap-2 font-bold">
+                  {verification?.ok ? (
+                    <CheckCircle2 className="size-4 text-accent" />
+                  ) : (
+                    <AlertTriangle className="size-4 text-destructive" />
+                  )}
+                  {verification
+                    ? verification.ok
+                      ? "Verified live and fully processed on YouTube"
+                      : "Not fully confirmed yet"
+                    : "Checking publication…"}
+                </div>
+                {verification && (
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    <li>Upload status: {verification.uploadStatus ?? "—"}</li>
+                    <li>Processing: {verification.processingStatus ?? "—"}</li>
+                    <li>Privacy: {verification.privacyStatus ?? "—"}</li>
+                    <li>Custom thumbnail: {verification.thumbnailApplied ? "applied" : "not applied"}</li>
+                    {verification.problems.map((p: string) => (
+                      <li key={p} className="text-destructive">{p}</li>
+                    ))}
+                  </ul>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={recheck}
+                  disabled={busy === "verify"}
+                >
+                  {busy === "verify" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                  Re-check
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Server copies of the generated thumbnail and research data are deleted
+                automatically one hour after publishing. The YouTube video is never touched.
+              </p>
+            </div>
           ) : (
             <Button size="lg" onClick={publish} disabled={!!busy || !videoFile}>
               {busy === "upload" || busy === "finalize" ? (

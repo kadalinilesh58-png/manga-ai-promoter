@@ -9,11 +9,15 @@ import {
   runResearch,
   signThumbnail,
   startResumableUpload,
+  verifyPublish,
+  purgeExpiredArtifacts,
 } from "./pipeline.server";
 import { buildAuthUrl, getChannelRow, redirectUriFor } from "./youtube.server";
 import { loadJob, persistDraft, saveThumbnailPath, listJobs, removeChannel } from "./jobs.server";
 
 export const getConnection = createServerFn({ method: "GET" }).handler(async () => {
+  // Opportunistic cleanup: removes server-side artifacts older than one hour.
+  purgeExpiredArtifacts(60).catch(() => undefined);
   const row = await getChannelRow();
   return row
     ? {
@@ -90,3 +94,13 @@ export const completeUpload = createServerFn({ method: "POST" })
     z.object({ jobId: z.string(), videoId: z.string() }).parse(data),
   )
   .handler(async ({ data }) => finalizeUpload(data.jobId, data.videoId));
+
+export const verifyVideo = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) =>
+    z.object({ jobId: z.string(), videoId: z.string() }).parse(data),
+  )
+  .handler(async ({ data }) => verifyPublish(data.jobId, data.videoId));
+
+export const purgeNow = createServerFn({ method: "POST" }).handler(async () =>
+  purgeExpiredArtifacts(60),
+);
