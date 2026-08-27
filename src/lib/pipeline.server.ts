@@ -392,7 +392,9 @@ export async function startResumableUpload(input: {
   jobId: string;
   fileSize: number;
   mimeType: string;
+  origin?: string;
 }) {
+
   const { token } = await getAccessToken();
   const { data: job, error } = await supabaseAdmin
     .from("video_jobs")
