@@ -392,7 +392,7 @@ export async function startResumableUpload(input: {
   jobId: string;
   fileSize: number;
   mimeType: string;
-  origin?: string;
+  origin?: string | undefined;
 }) {
 
   const { token } = await getAccessToken();
