@@ -6,6 +6,7 @@ import {
   buildMetadata,
   finalizeUpload,
   makeThumbnail,
+  planThumbnail,
   runResearch,
   signThumbnail,
   startResumableUpload,
@@ -55,6 +56,7 @@ export const generatePlan = createServerFn({ method: "POST" })
     const brief = await analyzeStory(data.storyText);
     const research = await runResearch(brief);
     const meta = await buildMetadata(brief, research);
+    const thumbnailPlan = await planThumbnail(brief, research, meta).catch(() => null);
     const job = await persistDraft({
       fileName: data.fileName ?? null,
       fileSize: data.fileSize ?? null,
@@ -62,15 +64,32 @@ export const generatePlan = createServerFn({ method: "POST" })
       brief,
       research,
     });
-    return { job, brief, research, meta };
+    return { job, brief, research, meta, thumbnailPlan };
   });
 
 export const createThumbnail = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
-    z.object({ jobId: z.string(), prompt: z.string() }).parse(data),
+    z
+      .object({
+        jobId: z.string(),
+        prompt: z.string(),
+        plan: z
+          .object({
+            competitorInsights: z.array(z.string()).default([]),
+            concept: z.string().default(""),
+            headline: z.string().default(""),
+            kicker: z.string().default(""),
+            composition: z.string().default(""),
+            palette: z.string().default(""),
+            typography: z.string().default(""),
+            prompt: z.string().default(""),
+          })
+          .nullish(),
+      })
+      .parse(data),
   )
   .handler(async ({ data }) => {
-    const path = await makeThumbnail(data.jobId, data.prompt);
+    const path = await makeThumbnail(data.jobId, data.prompt, data.plan ?? null);
     await saveThumbnailPath(data.jobId, path, data.prompt);
     return { url: await signThumbnail(path) };
   });
