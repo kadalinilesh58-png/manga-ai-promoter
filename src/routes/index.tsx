@@ -157,7 +157,11 @@ function Home() {
     try {
       setBusy("thumb");
       const { url } = await createThumbnail({
-        data: { jobId: plan.job.id, prompt: plan.brief.thumbnailPrompt },
+        data: {
+          jobId: plan.job.id,
+          prompt: plan.thumbnailPlan?.prompt || plan.brief.thumbnailPrompt,
+          plan: plan.thumbnailPlan ?? null,
+        },
       });
       setThumbUrl(url);
       toast.success("Thumbnail generated");
@@ -365,6 +369,24 @@ function Home() {
                 {busy === "thumb" ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                 {thumbUrl ? "Regenerate thumbnail" : "Generate thumbnail"}
               </Button>
+
+              {plan.thumbnailPlan && (
+                <div className="mt-4 space-y-2 rounded-xl bg-secondary/40 p-4 text-sm">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Thumbnail plan from competitor analysis
+                  </div>
+                  <p className="text-foreground">{plan.thumbnailPlan.concept}</p>
+                  <p className="text-muted-foreground">
+                    Overlay text: <span className="text-accent">{plan.thumbnailPlan.headline}</span>
+                    {plan.thumbnailPlan.kicker ? ` · ${plan.thumbnailPlan.kicker}` : ""}
+                  </p>
+                  <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                    {plan.thumbnailPlan.competitorInsights.map((i) => (
+                      <li key={i}>{i}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             <div className="space-y-5">
