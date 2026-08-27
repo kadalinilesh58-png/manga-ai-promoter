@@ -24,6 +24,18 @@ export type CompetitorVideo = {
   publishedAt: string;
   tags: string[];
   descriptionSnippet: string;
+  thumbnailUrl: string | null;
+};
+
+export type ThumbnailPlan = {
+  competitorInsights: string[];
+  concept: string;
+  headline: string;
+  kicker: string;
+  composition: string;
+  palette: string;
+  typography: string;
+  prompt: string;
 };
 
 export type ResearchData = {
@@ -136,6 +148,7 @@ export async function runResearch(brief: StoryBrief): Promise<ResearchData> {
             publishedAt?: string;
             tags?: string[];
             description?: string;
+            thumbnails?: Record<string, { url?: string } | undefined>;
           };
           statistics?: { viewCount?: string };
         }[];
@@ -148,6 +161,11 @@ export async function runResearch(brief: StoryBrief): Promise<ResearchData> {
           publishedAt: item.snippet?.publishedAt ?? "",
           tags: item.snippet?.tags ?? [],
           descriptionSnippet: (item.snippet?.description ?? "").slice(0, 300),
+          thumbnailUrl:
+            item.snippet?.thumbnails?.maxres?.url ??
+            item.snippet?.thumbnails?.high?.url ??
+            item.snippet?.thumbnails?.medium?.url ??
+            null,
         });
       }
     } catch {
@@ -183,20 +201,39 @@ export async function runResearch(brief: StoryBrief): Promise<ResearchData> {
 /* Step 3 — synthesise publish-ready metadata                          */
 /* ------------------------------------------------------------------ */
 
-function clampTags(tags: string[]) {
+/**
+ * YouTube rejects a tag list (invalidTags / 400) when a tag contains angle
+ * brackets, quotes, commas or non-ASCII junk, when a single tag is longer than
+ * 100 characters, or when the whole list exceeds ~500 characters (tags that
+ * contain a space are counted with surrounding quotes, i.e. +2 characters).
+ * This normaliser enforces all of those rules before anything reaches the API.
+ */
+export function sanitizeTags(tags: unknown): string[] {
+  const list = Array.isArray(tags) ? tags : [];
   const out: string[] = [];
-  let budget = 480; // YouTube caps total tag length at ~500 chars
-  for (const raw of tags) {
-    const tag = raw.replace(/[<>"]/g, "").trim();
-    if (!tag || tag.length > 60) continue;
+  let budget = 460;
+  for (const raw of list) {
+    if (typeof raw !== "string") continue;
+    const tag = raw
+      .replace(/[<>"'`,|\\]/g, " ")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/^#+/, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 60)
+      .trim();
+    if (tag.length < 2) continue;
     if (out.some((t) => t.toLowerCase() === tag.toLowerCase())) continue;
-    const cost = tag.length + 1;
-    if (budget - cost < 0) break;
+    const cost = tag.length + (tag.includes(" ") ? 3 : 1);
+    if (budget - cost < 0) continue;
     budget -= cost;
     out.push(tag);
+    if (out.length >= 40) break;
   }
   return out;
 }
+
+const clampTags = sanitizeTags;
 
 export async function buildMetadata(
   brief: StoryBrief,
@@ -256,10 +293,81 @@ Return JSON with keys: title, description, tags, hashtags, keywords, strategyNot
 /* Thumbnail                                                           */
 /* ------------------------------------------------------------------ */
 
-export async function makeThumbnail(jobId: string, prompt: string) {
+/** Looks at the top competitor thumbnails and writes an art-direction plan. */
+export async function planThumbnail(
+  brief: StoryBrief,
+  research: ResearchData,
+  meta: Metadata,
+): Promise<ThumbnailPlan> {
+  const refs = research.competitors
+    .filter((c) => c.thumbnailUrl)
+    .slice(0, 6);
+
+  const content: Record<string, unknown>[] = [
+    {
+      type: "text",
+      text: `You are an award-winning YouTube thumbnail designer for manga/manhwa recap channels.
+
+${refs.length ? `The attached images are the CURRENT TOP-RANKING competitor thumbnails for this niche (in order):\n${refs.map((c, i) => `${i + 1}. "${c.title}" — ${c.channel} — ${c.views} views`).join("\n")}\n\nStudy them: composition, where the face sits, how much text they use, text colour and outline, colour temperature, contrast, effects.` : "No competitor thumbnails were available — rely on proven manhwa-recap thumbnail conventions."}
+
+VIDEO TITLE: ${meta.title}
+STORY: ${brief.logline}
+HOOK MOMENT: ${brief.hookMoment}
+CHARACTERS: ${brief.keyCharacters.join(", ")}
+MOOD: ${brief.moodPalette}
+TOP KEYWORDS: ${meta.keywords.slice(0, 8).join(", ")}
+
+Design a thumbnail that beats them: same visual language, higher contrast, clearer single focal face, and short punchy overlay text that is readable at 210x118 px.
+
+Return JSON only with keys:
+{
+  "competitorInsights": ["4-6 concrete observations about what the competitor thumbnails do"],
+  "concept": "one sentence describing the winning idea",
+  "headline": "MAIN OVERLAY TEXT, 2-4 words, ALL CAPS, max 18 characters",
+  "kicker": "optional tiny secondary line, 1-3 words, ALL CAPS, max 14 characters (empty string if not needed)",
+  "composition": "where the character, text and effects sit in the 16:9 frame",
+  "palette": "exact colour direction with hex-like descriptions",
+  "typography": "font weight, colour, outline/shadow treatment for the overlay text",
+  "prompt": "a complete image-generation prompt describing the finished thumbnail INCLUDING the exact overlay text in quotes and its placement"
+}`,
+    },
+    ...refs.map((c) => ({ type: "image_url", image_url: { url: c.thumbnailUrl } })),
+  ];
+
+  const plan = await chatJson<ThumbnailPlan>({
+    model: MODEL,
+    messages: [{ role: "user", content }],
+  });
+
+  const headline = (plan.headline ?? "").toUpperCase().slice(0, 18).trim();
+  const kicker = (plan.kicker ?? "").toUpperCase().slice(0, 14).trim();
+  return {
+    competitorInsights: (plan.competitorInsights ?? []).slice(0, 6),
+    concept: plan.concept ?? "",
+    headline,
+    kicker,
+    composition: plan.composition ?? "",
+    palette: plan.palette ?? "",
+    typography: plan.typography ?? "",
+    prompt: plan.prompt ?? brief.thumbnailPrompt,
+  };
+}
+
+export async function makeThumbnail(jobId: string, prompt: string, plan?: ThumbnailPlan | null) {
+  const textBlock = plan?.headline
+    ? `Render this overlay text INTO the artwork, spelled exactly, no other words anywhere:
+- Headline: "${plan.headline}" — huge, bold condensed sans-serif, ${plan.typography || "white with a heavy black outline and a soft drop shadow"}, occupying the ${plan.composition?.toLowerCase().includes("left") ? "right" : "left"} third or the lower band, never covering the face.
+${plan.kicker ? `- Kicker: "${plan.kicker}" — small accent line above or below the headline, in the accent colour.` : ""}
+Typography must be crisp, correctly spelled, kerned like a professional poster, and readable at 210x118 pixels.`
+    : `Do not render any text, letters, watermarks or logos.`;
+
   const fullPrompt = `${prompt}
 
-Format: 16:9 YouTube thumbnail, 1280x720, webtoon / manhwa digital illustration, bold rim lighting, saturated cinematic colour grade, strong focal character with an intense expression, dynamic background energy, high contrast so it pops at small sizes. Absolutely no text, no letters, no watermarks, no logos.`;
+${plan?.concept ? `Concept: ${plan.concept}\nComposition: ${plan.composition}\nPalette: ${plan.palette}\n` : ""}
+Format: 16:9 YouTube thumbnail, 1280x720, webtoon / manhwa digital illustration, one hero character with an intense readable expression, bold rim lighting, saturated cinematic colour grade, strong depth separation between subject and background, high contrast so it pops at small sizes, safe margins so nothing important touches the edges.
+
+${textBlock}`;
+
   const b64 = await generateImageBase64(fullPrompt);
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   const path = `${jobId}/${Date.now()}.png`;
@@ -299,7 +407,7 @@ export async function startResumableUpload(input: {
     snippet: {
       title: String(job.title).slice(0, 98),
       description: String(job.description ?? "").slice(0, 4900),
-      tags: (job.tags ?? []) as string[],
+      tags: sanitizeTags(job.tags),
       categoryId: "1",
       defaultLanguage: "en",
       defaultAudioLanguage: "en",
