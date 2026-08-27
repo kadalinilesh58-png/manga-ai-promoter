@@ -162,9 +162,9 @@ export async function runResearch(brief: StoryBrief): Promise<ResearchData> {
           tags: item.snippet?.tags ?? [],
           descriptionSnippet: (item.snippet?.description ?? "").slice(0, 300),
           thumbnailUrl:
-            item.snippet?.thumbnails?.maxres?.url ??
-            item.snippet?.thumbnails?.high?.url ??
-            item.snippet?.thumbnails?.medium?.url ??
+            item.snippet?.thumbnails?.['maxres']?.url ??
+            item.snippet?.thumbnails?.['high']?.url ??
+            item.snippet?.thumbnails?.['medium']?.url ??
             null,
         });
       }
