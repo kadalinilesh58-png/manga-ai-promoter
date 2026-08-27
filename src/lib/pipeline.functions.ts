@@ -103,9 +103,15 @@ export const recentJobs = createServerFn({ method: "GET" }).handler(async () => 
 export const beginUpload = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) =>
     z
-      .object({ jobId: z.string(), fileSize: z.number(), mimeType: z.string() })
+      .object({
+        jobId: z.string(),
+        fileSize: z.number(),
+        mimeType: z.string(),
+        origin: z.string().optional(),
+      })
       .parse(data),
   )
+
   .handler(async ({ data }) => startResumableUpload(data));
 
 export const completeUpload = createServerFn({ method: "POST" })

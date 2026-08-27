@@ -392,7 +392,9 @@ export async function startResumableUpload(input: {
   jobId: string;
   fileSize: number;
   mimeType: string;
+  origin?: string | undefined;
 }) {
+
   const { token } = await getAccessToken();
   const { data: job, error } = await supabaseAdmin
     .from("video_jobs")
@@ -429,10 +431,14 @@ export async function startResumableUpload(input: {
         "content-type": "application/json; charset=UTF-8",
         "X-Upload-Content-Length": String(input.fileSize),
         "X-Upload-Content-Type": input.mimeType || "video/*",
+        // Tells Google to issue a CORS-enabled session URL so the browser can
+        // PUT the chunks directly (including the final 200 response).
+        ...(input.origin ? { Origin: input.origin } : {}),
       },
       body: JSON.stringify(body),
     },
   );
+
 
   if (!res.ok) {
     const text = await res.text();
